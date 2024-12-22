@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Welcome</title>
+    <!-- Custom CSS -->
+    <link
+      href="{{ url_for('static', filename='css/styles.css') }}"
+      rel="stylesheet"
+    />
+    <!-- Include D3.js from CDN -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <!-- Include the createLineChart.js script -->
+    <script src="{{ url_for('static', filename='js/LineChart.js') }}"></script>
+  </head>
+  <body>
+    <header class="banner center-align">
+      <h1>VISIO</h1>
+    </header>
+    <div class="container center-align">
+      <h1>Welcome</h1>
+      <form
+        action="/"
+        method="post"
+        enctype="multipart/form-data"
+        autocomplete="off"
+      >
+        <label for="file-upload" class="file-upload-button">
+          <span>Upload GMC data</span>
+        </label>
+        <input
+          id="file-upload"
+          type="file"
+          name="file"
+          accept=".txt, .csv"
+          required
+          onchange="this.form.submit()"
+        />
+      </form>
+
+      {% if data %}
+      <div id="chart-container">
+        <h2>Elapsed Time vs. Scale</h2>
+        <svg
+          id="chart1"
+          width="100%"
+          height="auto"
+          viewBox="0 0 600 400"
+          preserveAspectRatio="xMidYMid meet"
+        ></svg>
+
+        <h2>Elapsed Time vs. Tot Infused Vol</h2>
+        <svg
+          id="chart2"
+          width="100%"
+          height="auto"
+          viewBox="0 0 600 400"
+          preserveAspectRatio="xMidYMid meet"
+        ></svg>
+
+        <h2>Elapsed Time vs. Bladder Pressure</h2>
+        <svg
+          id="chart3"
+          width="100%"
+          height="auto"
+          viewBox="0 0 600 400"
+          preserveAspectRatio="xMidYMid meet"
+        ></svg>
+        <button id="trimGraphButton">Trim Graph</button>
+      </div>
+
+    </div>
+
+    <!-- The Modal -->
+    <div id="trimGraphModal" class="modal">
+      <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2>Trim Graph</h2>
+        <svg id="chart4" width="100%" height="auto" viewBox="0 0 600 400" preserveAspectRatio="xMidYMid meet"></svg>
+        <button id="applyTrimButton">Apply Trim</button>
+        <button id="restoreOriginalButton">Restore to Original</button>
+      </div>
+    </div>
+    <script>
+      // Parse the JSON data passed from Flask
+      var dataGraph1 = JSON.parse({{ data[0]|tojson }});
+      var dataGraph2 = JSON.parse({{ data[1]|tojson }});
+      var dataGraph3 = JSON.parse({{ data[2]|tojson }});
+
+      // Initialize trimedDataGraph3 with the original data
+      var trimedDataGraph3 = dataGraph3.slice(); // Create a shallow copy
+
+      // Extract the common Elapsed Time
+      var elapsedTime = dataGraph1.map(d => d['Elapsed Time']);
+
+      // Extract specific parts of the data for each chart
+      var scale = dataGraph1.map(d => d['Scale']);
+      var totInfusedVol = dataGraph2.map(d => d['Tot Infused Vol']);
+      var bladderPressure = dataGraph3.map(d => d['Bladder Pressure']);
+
+      // Create the charts using the LineChart class
+      new LineChart("#chart1", elapsedTime, scale, "Elapsed Time", "Scale");
+      new LineChart("#chart2", elapsedTime, totInfusedVol, "Elapsed Time", "Tot Infused Vol");
+      new LineChart("#chart3", elapsedTime, bladderPressure, "Elapsed Time", "Bladder Pressure");
+
+      // Get the modal
+      var modal = document.getElementById("trimGraphModal");
+
+      // Get the button that opens the modal
+      var btn = document.getElementById("trimGraphButton");
+
+      // Get the <span> element that closes the modal
+      var span = document.getElementsByClassName("close")[0];
+
+      // When the user clicks the button, open the modal
+      btn.onclick = function () {
+        modal.style.display = "block";
+      };
+
+      // When the user clicks on <span> (x), close the modal
+      span.onclick = function () {
+        modal.style.display = "none";
+      };
+
+      // When the user clicks anywhere outside of the modal, close it
+      window.onclick = function (event) {
+        if (event.target == modal) {
+          modal.style.display = "none";
+        }
+      };
+
+      // Initialize the interactive line chart
+      var interactiveChart;
+
+      function initializeInteractiveChart() {
+        // Remove any existing SVG elements
+        d3.select("#chart4").selectAll("*").remove();
+
+        // Create the interactive chart
+        interactiveChart = new InteractiveLineChart(
+          "#chart4",
+          trimedDataGraph3.map(d => d['Elapsed Time']),
+          trimedDataGraph3.map(d => d['Bladder Pressure']),
+          "Elapsed Time",
+          "Bladder Pressure",
+          returnTrimPoints
+        );
+      }
+
+      // Call the function to initialize the chart
+      initializeInteractiveChart();
+
+      // Define a variable to store the coordinates
+      let currentTrimPoints = null;
+
+      // Define an array to store all trim intervals
+      let trimIntervals = [];
+
+      // Define the callback function
+      function returnTrimPoints(trimPoints) {
+        currentTrimPoints = trimPoints;
+        console.log("Trim points updated:", currentTrimPoints);
+      }
+
+      // Add event listener for the "Apply Trim" button
+      document.getElementById("applyTrimButton").onclick = function () {
+        if (currentTrimPoints) {
+          // Add the current trim points to the array
+          trimIntervals.push([...currentTrimPoints]); // Use spread operator to clone the array
+
+          // Reset trimedDataGraph3 to the original data
+          trimedDataGraph3 = dataGraph3.slice(); // Create a shallow copy
+
+          // Apply all trims cumulatively
+          trimIntervals.forEach(function (interval) {
+            trimedDataGraph3 = trimedDataGraph3.filter(d => {
+              return d['Elapsed Time'] < interval[0] || d['Elapsed Time'] > interval[1];
+            });
+          });
+
+          var trimmedElapsedTime = trimedDataGraph3.map(d => d['Elapsed Time']);
+          var trimmedBladderPressure = trimedDataGraph3.map(d => d['Bladder Pressure']);
+
+          // Update the charts
+          d3.select("#chart3").selectAll("*").remove();
+          new LineChart("#chart3", trimmedElapsedTime, trimmedBladderPressure, "Elapsed Time", "Bladder Pressure");
+
+          // Update the interactive chart without closing the modal
+          initializeInteractiveChart();
+
+          // Reset currentTrimPoints
+          currentTrimPoints = null;
+        }
+      };
+
+      // Add event listener for the "Restore to Original" button
+      document.getElementById("restoreOriginalButton").onclick = function () {
+        // Clear all trim intervals
+        trimIntervals = [];
+
+        // Reset trimedDataGraph3 to the original data
+        trimedDataGraph3 = dataGraph3.slice();
+
+        // Extract the original data
+        var originalElapsedTime = trimedDataGraph3.map(d => d['Elapsed Time']);
+        var originalBladderPressure = trimedDataGraph3.map(d => d['Bladder Pressure']);
+
+        // Update the charts with original data
+        d3.select("#chart3").selectAll("*").remove();
+        new LineChart("#chart3", originalElapsedTime, originalBladderPressure, "Elapsed Time", "Bladder Pressure");
+
+        // Update the interactive chart
+        initializeInteractiveChart();
+
+        // Reset currentTrimPoints
+        currentTrimPoints = null;
+
+        console.log("Data restored to original.");
+      };
+    </script>
+    {% else %}
+    <script>
+      console.warn("No data available to render charts.");
+      // Optionally, initialize empty data or handle the absence of data
+    </script>
+  {% endif %}
+  </body>
+</html>
