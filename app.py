@@ -7,6 +7,12 @@ from flask import send_file
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
+
+@app.route('/test', methods=['GET'])
+def test():
+    return jsonify({"message": "Congrats, server is live"}), 200
+
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
