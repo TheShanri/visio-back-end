@@ -10,7 +10,7 @@ CORS(app)  # Enable CORS for all routes
 
 @app.route('/test', methods=['GET'])
 def test():
-    return jsonify({"message": "Congrats, server is live"}), 200
+    return jsonify({"message": "Server connection stable."}), 200
 
 
 @app.route('/', methods=['GET', 'POST'])
